@@ -1,0 +1,29 @@
+{
+  "servers": [
+    {
+      "name": "filesystem",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./workspace"]
+    },
+    {
+      "name": "git",
+      "command": "uvx",
+      "args": ["mcp-server-git"]
+    },
+    { 
+      "name": "filesystem", 
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./workspace"] 
+    },
+    { 
+      "name": "git", 
+      "command": "uvx", 
+      "args": ["mcp-server-git"] 
+    },
+    { 
+      "name": "plant-identifier", 
+      "command": "python", 
+      "args": ["../servers/plant-identifier/server.py"] 
+    }
+  ]
+}
