@@ -1,6 +1,24 @@
-.env
-venv/
-.venv/
 __pycache__/
 *.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
 .env
+mcp_interactions.log
+
+.vscode/
+.idea/
+
+# Fotos que el usuario deja caer para identificar: pueden ser muchas y pesadas.
+# Las de ejemplo se versionan explicitamente mas abajo.
+workspace/*
+!workspace/.gitkeep
+!workspace/planta1.jpg
+!workspace/planta2.jpg
+# Los reportes que el asistente escribe si se versionan: ese es justamente el
+# escenario que demuestra el servidor MCP de git.
+!workspace/*.md

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Asistente de flora</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">&#9832;</div>
+        <div class="brand-text">
+          <h1>Asistente de flora</h1>
+          <p>Nativas, introducidas e invasoras v&iacute;a MCP</p>
+        </div>
+      </div>
+
+      <div class="sidebar-scroll">
+        <section class="panel photos-panel">
+          <div class="panel-header">
+            <h2>Fotos</h2>
+            <span id="photo-count" class="count-badge">&hellip;</span>
+          </div>
+
+          <input
+            id="place-input"
+            class="place-input"
+            type="text"
+            placeholder="&iquest;En qu&eacute; pa&iacute;s est&aacute;s? ej. Guatemala"
+            autocomplete="country-name"
+          />
+
+          <label class="upload-zone" id="upload-zone">
+            <input
+              type="file"
+              id="file-input"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              hidden
+            />
+            <span class="upload-icon">&#8593;</span>
+            <span class="upload-text">
+              Subir fotos
+              <small>o arrastralas aqu&iacute; &mdash; JPG, PNG o WebP</small>
+            </span>
+          </label>
+
+          <p id="upload-status" class="upload-status" hidden></p>
+
+          <div id="photo-grid" class="photo-grid">
+            <p class="panel-loading">Cargando fotos&hellip;</p>
+          </div>
+        </section>
+
+        <section class="panel tools-panel">
+          <div class="panel-header">
+            <h2>Herramientas disponibles</h2>
+            <span id="tool-total" class="count-badge">&hellip;</span>
+          </div>
+          <div id="server-groups" class="server-groups">
+            <p class="panel-loading">Conectando con los servidores MCP&hellip;</p>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <main class="chat">
+      <div id="messages" class="messages">
+        <div class="welcome">
+          <h2>&iexcl;Hola! Soy tu asistente de flora.</h2>
+          <p>
+            Sub&iacute; una foto de una planta ah&iacute; a la izquierda, dec&iacute;me en
+            qu&eacute; pa&iacute;s est&aacute;s, y te digo qu&eacute; especie es y si ah&iacute;
+            es <strong>nativa</strong>, <strong>introducida</strong> o
+            <strong>invasora</strong> &mdash; con la evidencia de GBIF que respalda cada
+            veredicto.
+          </p>
+          <div class="examples">
+            <button class="example-chip" data-prompt="Estoy en Guatemala. Eichhornia crassipes es nativa aqui? Si no, que hago al respecto?">Estatus + manejo</button>
+            <button class="example-chip" data-prompt="Que plantas introducidas estan registradas en Guatemala?">Introducidas del pais</button>
+            <button class="example-chip" data-prompt="Que herramientas MCP tenes conectadas y para que sirve cada una?">Que podes hacer</button>
+          </div>
+        </div>
+      </div>
+
+      <form id="chat-form" class="composer">
+        <textarea
+          id="input"
+          rows="1"
+          placeholder="Preg&uacute;ntale algo al asistente..."
+          autofocus
+        ></textarea>
+        <button type="submit" id="send-btn" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </form>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
