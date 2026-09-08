@@ -23,7 +23,7 @@
     { 
       "name": "plant-identifier", 
       "command": "python", 
-      "args": ["../servers/plant-identifier/server.py"] 
+      "args": ["../servers/server.py"] 
     }
   ]
 }
