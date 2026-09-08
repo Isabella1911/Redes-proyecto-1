@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "flora-remote-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-28",
+  // The agents package pulls in Node built-ins; without this flag the Worker
+  // fails to build rather than failing at runtime.
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  }
+}

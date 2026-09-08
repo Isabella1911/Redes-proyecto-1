@@ -7,6 +7,10 @@ build/
 dist/
 .pytest_cache/
 
+# Servidor remoto (Cloudflare Worker)
+node_modules/
+.wrangler/
+
 .env
 mcp_interactions.log
 

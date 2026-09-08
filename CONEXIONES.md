@@ -10,18 +10,19 @@ virtual (`.venv\Scripts\activate`) podés usar los nombres cortos
 
 ---
 
-## Los cinco tipos de conexión
+## Los seis tipos de conexión
 
 | # | Tipo | Transporte | Quién lo arranca | Dónde se configura |
 |---|------|-----------|------------------|--------------------|
-| 1 | Servidores oficiales (Filesystem, Git) | stdio | el host, como subproceso | `STDIO_SERVERS` en `config.py` |
-| 2 | Tu servidor propio (`flora`) | stdio | el host, como subproceso | `STDIO_SERVERS` en `config.py` |
-| 3 | Servidores de compañeros, misma máquina | stdio | el host, como subproceso | `STDIO_SERVERS` en `config.py` |
+| 1 | Servidores oficiales (Filesystem, Git) | stdio | el host, como subproceso | `stdio_servers()` en `config.py` |
+| 2 | Tu servidor propio (`flora`) | stdio | el host, como subproceso | `stdio_servers()` en `config.py` |
+| 3 | Servidores de compañeros, misma máquina | stdio | el host, como subproceso | `stdio_servers()` en `config.py` |
 | 4 | Tu servidor consumido por otros | HTTP | **vos, a mano** | `--http --host 0.0.0.0` |
 | 5 | Servidores de otros, por red | HTTP | el dueño, en su máquina | `FLORA_REMOTE_MCP` en `.env` |
+| 6 | Tu servidor en la nube (Cloudflare) | HTTPS | Cloudflare, siempre encendido | `FLORA_REMOTE_MCP` en `.env` |
 
 Los tipos 1-3 no requieren red: el host lanza el proceso y le habla por stdin y
-stdout. Los tipos 4 y 5 son los que cruzan la red.
+stdout. Los tipos 4, 5 y 6 son los que cruzan la red.
 
 ---
 
@@ -60,8 +61,8 @@ cuando inicia. Solo necesitás Node.js y `uv` instalados.
 **Verificar:** al arrancar imprime qué conectó.
 
 ```
-Servidores conectados (5): filesystem, git, flora, docfinder, library
-Herramientas disponibles: 38
+Servidores conectados (6): filesystem, git, flora, docfinder, library, flora-remoto
+Herramientas disponibles: 41
 ```
 
 Si alguno falta aparece con `[!]` y el motivo.
@@ -71,7 +72,7 @@ Si alguno falta aparece con `[!]` y el motivo.
 ## Tipo 3 — Servidores de compañeros en tu máquina
 
 Se clonan como carpetas hermanas y cada uno se instala según **su propio
-README**. Las rutas están en `STDIO_SERVERS` dentro de
+README**. Las rutas están en `stdio_servers()` dentro de
 [`src/flora_assistant/config.py`](src/flora_assistant/config.py).
 
 | Servidor | Ruta esperada | Requiere |
@@ -87,7 +88,7 @@ docker compose -f ../Proyecto1_Redes/CC3067-library-mcp/docker-compose.yml up -d
 ```
 
 Para agregar el servidor de otro compañero, copiá una entrada en
-`STDIO_SERVERS` con su comando y su `cwd`. Si no lo tenés clonado, el host lo
+`stdio_servers()` con su comando y su `cwd`. Si no lo tenés clonado, el host lo
 reporta como caído y sigue con el resto — no hace falta borrar la entrada.
 
 ---
@@ -110,7 +111,7 @@ entre equipos de la misma LAN. Apagalo antes de la demo.
 ### Paso 3: levantar el servidor en una terminal aparte
 
 ```bash
-.venv/Scripts/python.exe -m flora_mcp.server --http --host 0.0.0.0 --port 8100
+cd ../Proyecto-Redes-Isa/flora-remote-mcp && .venv/Scripts/python.exe -m flora_mcp.server --http --host 0.0.0.0 --port 8100
 ```
 
 `0.0.0.0` acepta conexiones de la red. El servidor **no tiene autenticación**,
@@ -201,6 +202,50 @@ atendió.
 
 ---
 
+## Tipo 6 — Tu servidor en la nube (Cloudflare Workers)
+
+Es el punto 7 de la rúbrica: un servidor MCP ejecutándose en un servicio de
+nube, no como subproceso local. Está desplegado y siempre encendido, así que no
+hay nada que levantar antes de la demo.
+
+```
+https://flora-remote-mcp.isaproyecto.workers.dev/mcp
+```
+
+Ya está en el `.env`. Para verificarlo:
+
+```bash
+.venv/Scripts/python.exe scripts/check_remote_mcp.py https://flora-remote-mcp.isaproyecto.workers.dev/mcp
+```
+
+```
+[ok] TCP    172.67.128.151:443 acepta conexiones
+[ok] TLS    TLSv1.3, certificado para isaproyecto.workers.dev, *.isaproyecto.workers.dev
+[ok] MCP    flora-remote -- 3 tools: lookup_species, native_range, occurrences_in_country
+```
+
+El código vive en [`remote-server/`](remote-server/README.md), con sus propias
+instrucciones de despliegue. Ojo con el nombre: este es el Worker de
+TypeScript, distinto del repo `flora-remote-mcp` que aloja el servidor local
+de Python.
+
+**Escenario para la demo** — muestra los dos servidores como complementarios:
+
+```
+Usando el servidor flora-remoto, de donde es originaria Hydrilla verticillata
+y cuantos registros hay en Guatemala?
+```
+
+El remoto responde el origen y la presencia, y avisa que el estatus
+(nativa/introducida/invasora) requiere el servidor local. Ahí pedís la
+clasificación completa y se ve el ruteo entre ambos.
+
+> Si acabás de crear el subdominio `.workers.dev`, el certificado TLS tarda
+> unos minutos en emitirse. Mientras tanto el TCP conecta pero el TLS falla:
+> por eso el script revisa esa capa por separado.
+
+---
+
 ## Checklist de la demo
 
 1. [ ] VPN apagada, todos en la misma red Wi-Fi
@@ -222,6 +267,7 @@ atendió.
 | `rechazo la conexion` | Nada escucha en ese puerto | Que arranque el servidor, y que use `--host 0.0.0.0` y no `127.0.0.1` |
 | `no respondio en 5s` | Firewall descartando paquetes, o IP equivocada | Regla de firewall en la máquina del otro; confirmar la IP con `check_remote_mcp.py` sin argumentos |
 | `no se pudo resolver` | Nombre de host mal escrito | Usar la IP numérica |
+| `handshake TLS rechazado` | Certificado todavía no emitido en un subdominio `.workers.dev` recién creado | Esperar unos minutos y reintentar |
 | TCP `[ok]` pero MCP falla | Puerto ocupado por otra cosa, o la ruta no es `/mcp` | Confirmar la URL completa con el dueño |
 | Se ven entre sí pero no conectan | VPN activa en alguno de los dos | Apagarla en ambos |
 | El servidor arranca pero nadie lo alcanza | Bindeado a `127.0.0.1` | Relanzar con `--host 0.0.0.0` |
@@ -235,7 +281,7 @@ atendió.
 
 ```bash
 # mi servidor, para que me consuman
-.venv/Scripts/python.exe -m flora_mcp.server --http --host 0.0.0.0 --port 8100
+cd ../Proyecto-Redes-Isa/flora-remote-mcp && .venv/Scripts/python.exe -m flora_mcp.server --http --host 0.0.0.0 --port 8100
 
 # mis URLs para compartir
 .venv/Scripts/python.exe scripts/check_remote_mcp.py

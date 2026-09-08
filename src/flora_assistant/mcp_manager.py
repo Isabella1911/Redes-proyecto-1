@@ -10,7 +10,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
 
-from .config import HTTP_SERVERS, STDIO_SERVERS
+from .config import http_servers, stdio_servers
 from .logging_utils import log_mcp_call
 
 # How long to wait for a remote server's TCP connection before giving up.
@@ -101,7 +101,10 @@ class MCPManager:
             self.tool_routing[exposed_name(name, tool.name)] = (name, tool.name)
 
     async def connect_all(self) -> None:
-        for cfg in STDIO_SERVERS:
+        # Read the configuration now rather than at import time: the caller has
+        # loaded the .env by this point, so FLORA_REMOTE_MCP and PLANTNET_API_KEY
+        # are actually visible.
+        for cfg in stdio_servers():
             params = StdioServerParameters(
                 command=cfg.command, args=cfg.args, env=cfg.env or None, cwd=cfg.cwd
             )
@@ -111,7 +114,7 @@ class MCPManager:
             except Exception as exc:  # noqa: BLE001 -- one bad server must not stop the rest
                 self.startup_errors[cfg.name] = f"{type(exc).__name__}: {exc}"
 
-        for http_cfg in HTTP_SERVERS:
+        for http_cfg in http_servers():
             if not await reachable(http_cfg.url):
                 self.startup_errors[http_cfg.name] = (
                     f"inalcanzable en {http_cfg.url} "

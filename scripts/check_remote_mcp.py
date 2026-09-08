@@ -15,6 +15,7 @@ Two modes:
 import asyncio
 import ipaddress
 import socket
+import ssl
 import sys
 from urllib.parse import urlparse
 
@@ -84,6 +85,46 @@ def tcp_reachable(host: str, port: int) -> tuple[bool, str]:
         return False, f"{resolved}:{port} inalcanzable -- {exc.strerror or exc}"
 
 
+def tls_handshake(host: str, port: int) -> tuple[bool, str]:
+    """TLS sits between TCP and HTTP, and it fails for its own reasons -- most
+    commonly, for a freshly created workers.dev subdomain, a certificate that
+    has not been issued yet."""
+    context = ssl.create_default_context()
+    try:
+        with socket.create_connection((host, port), timeout=TCP_TIMEOUT) as raw:
+            with context.wrap_socket(raw, server_hostname=host) as tls:
+                cert = tls.getpeercert()
+                names = [v for k, v in cert.get("subjectAltName", ()) if k == "DNS"]
+                covers = ", ".join(names[:3]) or "(sin SAN)"
+                return True, f"{tls.version()}, certificado para {covers}"
+    except ssl.SSLCertVerificationError as exc:
+        return False, f"certificado no valido para este host -- {exc.verify_message or exc}"
+    except ssl.SSLError as exc:
+        return False, (
+            f"handshake TLS rechazado ({exc.reason or exc}). En un subdominio "
+            "*.workers.dev recien creado esto normalmente significa que Cloudflare "
+            "todavia no emite el certificado: esperá unos minutos y reintentá."
+        )
+    except OSError as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def _leaf_errors(exc: BaseException) -> list[str]:
+    """Flatten an ExceptionGroup down to the errors that actually happened.
+
+    The MCP client runs its transport in a task group, so a plain failure
+    surfaces as 'ExceptionGroup: unhandled errors in a TaskGroup', which says
+    nothing about what went wrong. The whole point of this script is to name the
+    layer that failed, so unwrap it.
+    """
+    if isinstance(exc, BaseExceptionGroup):
+        found: list[str] = []
+        for sub in exc.exceptions:
+            found.extend(_leaf_errors(sub))
+        return found or [f"{type(exc).__name__}: {exc}"]
+    return [f"{type(exc).__name__}: {exc}"]
+
+
 async def mcp_handshake(url: str) -> tuple[bool, str]:
     try:
         async with asyncio.timeout(MCP_TIMEOUT):
@@ -94,9 +135,9 @@ async def mcp_handshake(url: str) -> tuple[bool, str]:
                     names = ", ".join(tool.name for tool in listed.tools) or "(ninguna)"
                     return True, f"{result.server_info.name} -- {len(listed.tools)} tools: {names}"
     except TimeoutError:
-        return False, f"el servidor acepto TCP pero no completo el handshake MCP en {MCP_TIMEOUT}s"
+        return False, f"el servidor acepto la conexion pero no completo el handshake MCP en {MCP_TIMEOUT}s"
     except Exception as exc:  # noqa: BLE001 -- this is a diagnostic, report anything
-        return False, f"{type(exc).__name__}: {exc}"
+        return False, " | ".join(_leaf_errors(exc))
 
 
 async def check(url: str) -> bool:
@@ -112,6 +153,12 @@ async def check(url: str) -> bool:
     print(f"{OK if reachable else FAIL} TCP    {detail}")
     if not reachable:
         return False
+
+    if parsed.scheme == "https":
+        secure, detail = tls_handshake(parsed.hostname, port)
+        print(f"{OK if secure else FAIL} TLS    {detail}")
+        if not secure:
+            return False
 
     handshake, detail = await mcp_handshake(url)
     print(f"{OK if handshake else FAIL} MCP    {detail}")

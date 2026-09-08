@@ -23,8 +23,10 @@ Guatemala).
   (console + `mcp_interactions.log`).
 - Connects to the official **Filesystem** and **Git** MCP servers to list the
   photos in the working folder and version-control the reports it writes.
-- Ships its own local MCP server, **`flora-mcp`**, which identifies plants from
-  a photo (Pl@ntNet) and classifies their status per country against GBIF.
+- Uses its own local MCP server, **[`flora-mcp`](https://github.com/Isabella1911/flora-remote-mcp)**,
+  which identifies plants from a photo (Pl@ntNet) and classifies their status
+  per country against GBIF. It lives in its own public repository, cloned as a
+  sibling of this one, and is launched from there.
 - Connects to two classmates' local MCP servers (a mock internal documentation
   search, and a library catalog backed by a real MySQL database) to demonstrate
   using and combining third-party MCP servers.
@@ -40,9 +42,10 @@ Chatbot (host)
  |- Claude API client        -> decides which tool(s) to call and in what order
  |- MCP client -> Filesystem MCP server (official, stdio)
  |- MCP client -> Git MCP server (official, stdio)
- |- MCP client -> flora-mcp (own server, stdio) -> Pl@ntNet + GBIF
+ |- MCP client -> flora-mcp (own server, separate repo, stdio) -> Pl@ntNet + GBIF
  |- MCP client -> docfinder (classmate's server, stdio)
- `- MCP client -> library (classmate's server, stdio)
+ |- MCP client -> library (classmate's server, stdio)
+ `- MCP client -> flora-remote (own server, deployed on Cloudflare, HTTPS) -> GBIF
 ```
 
 Each MCP client is a `ClientSession` from the official `mcp` SDK, owned by the
@@ -51,8 +54,9 @@ a single tool list; the host routes each `tool_use` response back to the client
 for the server that owns that tool.
 
 A server that fails to start is recorded in `MCPManager.startup_errors` and
-skipped rather than taking the chatbot down: with five servers, two of them
-other people's, one being unavailable is a normal Tuesday.
+skipped rather than taking the chatbot down: with six servers -- two of them
+other people's and one across the internet -- one being unavailable is a normal
+Tuesday.
 
 ## How the status is decided
 
@@ -85,6 +89,9 @@ Taxonomy has one trap worth knowing about: Pl@ntNet returns *Eichhornia
 crassipes* while GBIF's backbone has moved to *Pontederia crassipes*, and each
 checklist is indexed under whichever name its compiler used. Every lookup in
 `gbif.py` tries both the matched key and the accepted key for this reason.
+
+The full specification of these tools lives in the
+[flora-mcp repository](https://github.com/Isabella1911/flora-remote-mcp).
 
 ## Requirements
 
@@ -181,7 +188,7 @@ The photo endpoints, if you want to drive them directly:
 Neither is required to run this chatbot. If one is missing or its database is
 down, the host reports it under `startup_errors`, the web UI shows it as failed,
 and the other servers keep working. To drop them entirely, remove those two
-entries from `STDIO_SERVERS`.
+entries from `stdio_servers()`.
 
 ### Remote servers over HTTP (rubric item 7)
 
@@ -203,7 +210,7 @@ FLORA_REMOTE_MCP=flora-remoto=http://192.168.1.50:8100/mcp
 FLORA_REMOTE_MCP=https://flora.example.com/mcp,compa=https://otro.example.com/mcp
 ```
 
-Entries can also be hard-coded in `HTTP_SERVERS` in `config.py`. Either way
+Entries can also be hard-coded in `http_servers()` in `config.py`. Either way
 `MCPManager` connects to them through the same code path as the local ones, and
 `tests/test_remote_http.py` proves it by starting the server on a loopback port
 and consuming it over HTTP.
@@ -258,6 +265,7 @@ It runs standalone, so it can also be driven by MCP Inspector, Claude Desktop or
 anyone else's host:
 
 ```bash
+cd ../Proyecto-Redes-Isa/flora-remote-mcp
 .venv\Scripts\python.exe -m flora_mcp.server          # stdio
 .venv\Scripts\python.exe -m flora_mcp.server --http   # Streamable HTTP, port 8100
 ```
@@ -279,7 +287,7 @@ saw in a Filesystem listing without knowing the server's working directory.
 Inspect it with MCP Inspector:
 
 ```bash
-npx -y @modelcontextprotocol/inspector .venv\Scripts\python.exe -m flora_mcp.server
+npx -y @modelcontextprotocol/inspector .venv\Scripts\python.exe -m flora_mcp.server   # from the flora-mcp repo
 ```
 
 ## Project layout
@@ -294,35 +302,31 @@ src/flora_assistant/       # the host
 ├── logging_utils.py       # request/response logging for MCP interactions
 └── config.py              # which MCP servers to connect to, and how
 
-src/flora_mcp/             # the project's own MCP server
-├── server.py              # tool definitions, stdio transport
-├── plantnet.py            # photo -> candidate species
-├── gbif.py                # species + country -> native/introduced/invasive
-└── knowledge_base.py      # curated management measures (the local half)
+remote-server/             # the cloud MCP server (Cloudflare Worker, TypeScript)
+└── src/index.ts           # GBIF taxonomy and native-range tools
 
 scripts/
-└── check_remote_mcp.py    # LAN connectivity diagnostic for the remote demo
+└── check_remote_mcp.py    # connectivity diagnostic: TCP, TLS and MCP, layer by layer
 
-tests/                     # offline unit tests + live-API tests marked `network`
+tests/                     # host tests: tool routing, config, photo API, reachability
 workspace/                 # photos the assistant can read
 ```
+
+The plant server is **not** in this repository. It is a deliverable of its own
+and lives at [Isabella1911/flora-remote-mcp](https://github.com/Isabella1911/flora-remote-mcp),
+expected as `../Proyecto-Redes-Isa/flora-remote-mcp` (override with
+`FLORA_MCP_DIR`). Its own tests and documentation ship with it.
 
 ## Tests
 
 ```bash
-.venv\Scripts\python.exe -m pytest -m "not network"
+.venv\Scripts\python.exe -m pytest
 ```
 
-That covers the classification heuristic against stubbed GBIF responses and
-launches `flora-mcp` as a real subprocess to exercise it over JSON-RPC. Drop the
-`-m` filter to also run the tests that hit the live GBIF API.
-
-## Extending the knowledge base
-
-`src/flora_mcp/knowledge_base.py` is the hand-written half of the server: GBIF
-says *what* a species is, not what to do about it. Add entries keyed by
-lowercase scientific name, and register any synonym Pl@ntNet might return in
-`SYNONYMS` so both names reach the same advice.
+Covers the host: server-qualified tool naming and routing, the lazily-read
+configuration, the photo upload endpoints, and the reachability probe. The
+plant server's own suite -- the classification heuristic and the JSON-RPC
+round trip over stdio and HTTP -- runs in its repository.
 
 ## Status
 
@@ -332,8 +336,9 @@ context across turns, and has been exercised live through both the console REPL
 and the web UI -- photo identification via Pl@ntNet, classification against
 GBIF, and management recommendations, plus routing to both classmates' servers.
 
-The remote path (rubric item 7) is working too: `flora-mcp --http` serves the
-same tools over Streamable HTTP, and the host has been run with the local stdio
-server and the remote HTTP one connected at the same time (6 servers, 42 tools),
-with Claude routing a call to the remote one specifically. Deploying it is a
-matter of changing the URL, not the code.
+The remote server (rubric item 7) is deployed and live on Cloudflare Workers at
+`https://flora-remote-mcp.isaproyecto.workers.dev/mcp` — see
+[`remote-server/`](remote-server/README.md). The host connects to it alongside
+the five local servers, and Claude has been shown routing a scenario to it
+specifically. `flora-mcp --http` additionally serves the *local* server over
+Streamable HTTP, which is how the remote code path was proven before deploying.
